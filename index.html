@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>自律管理系统 - 最终修复版</title>
+    <style>
+        /* 基础样式 */
+        body { font-family: '微软雅黑', sans-serif; margin: 0; padding: 0; background: #f5f8fa; color: #333; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+        .container { width: 90%; max-width: 800px; padding: 1rem; background: white; border-radius: 15px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); margin-top: 1rem; text-align: center; }
+        h2, h3 { color: #2c3e50; text-align: center; }
+        #dateDisplay { font-size: 1.1rem; color: #555; margin-bottom: 1rem; }
+        .progress { background: #ecf3f8; padding: 1rem; border-radius: 10px; margin-bottom: 1.5rem; text-align: center; }
+        .progress p { margin: 0.5rem 0; }
+        .challenge-status { display: flex; justify-content: space-around; align-items: center; margin-bottom: 1rem; }
+        .challenge-status.single { justify-content: center; }
+        .status-item { padding: 0.5rem 1rem; border-radius: 8px; font-weight: bold; }
+        .success-item { background: #d4edda; color: #155724; }
+        .failure-item { background: #f8d7da; color: #721c24; }
+        button { background: #3498db; color: white; padding: 0.8rem 1.5rem; border: none; border-radius: 8px; cursor: pointer; margin: 0.3rem; font-size: 1rem; transition: background-color 0.3s ease, transform 0.2s ease; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); }
+        button:hover { background: #2980b9; transform: scale(1.05); }
+        button:active { transform: translateY(2px) scale(1.05); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); }
+        #breakButton { background: #e74c3c; }
+        #breakButton:hover { background: #c0392b; }
+        #motivation, #breakMessage { font-size: 1.3rem; margin: 1.5rem 0; text-align: center; font-weight: bold; text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1); }
+        #motivation { color: #27ae60; }
+        #breakMessage { color: #e67e22; }
+        .strategy-box { background: #fffde7; padding: 1.2rem; border-left: 5px solid #f1c40f; border-radius: 8px; margin-bottom: 1.5rem; text-align: center; }
+        .strategy-box h3 { text-align: left; }
+        #breathCircle { width: 100px; height: 100px; border-radius: 50%; background: #87CEEB; margin: 1rem auto; display: none; animation: breathe 6s ease-in-out infinite; opacity: 0.5; }
+        @keyframes breathe { 0% { transform: scale(0.8); opacity: 0.5; } 50% { transform: scale(1.2); opacity: 1; } 100% { transform: scale(0.8); opacity: 0.5; } }
+        #breathTimer { text-align: center; margin-top: 1rem; }
+        #activity { margin-top: 0.5rem; text-align: center; font-style: italic; color: #777; }
+        #thumbsUp { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0); font-size: 8rem; opacity: 0; z-index: 1000; pointer-events: none;}
+        @keyframes thumbsUpAnim { 0% { transform: translate(-50%, -50%) scale(0); opacity: 0; } 50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(1); opacity: 0; } }
+        #statsModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 999; overflow: auto; }
+        .modal-content { background: white; width: 80%; max-width: 600px; margin: 5% auto; padding: 2rem; border-radius: 15px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); position: relative; }
+        .close-button { position: absolute; top: 1rem; right: 1rem; font-size: 1.5rem; cursor: pointer; color: #999; }
+        .close-button:hover { color: #333; }
+        #calendar { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        #calendar th, #calendar td { border: 1px solid #ddd; padding: 0.4rem; text-align: center; }
+        #calendar th { background: #f0f0f0; font-weight: bold; }
+        #calendar td.success { background: #dff0d8; }
+        #calendar td.failure { background: #dc3545; color: white; }
+        #calendar td.no-failure { background: #eee; }
+        #streakInfo { margin-top: 1rem; font-size: 1.1rem; }
+        .footer { margin-top: auto; padding: 1rem; color: #666; font-size: 0.9rem; text-align: center; }
+        .footer ul { list-style: none; padding: 0; }
+        #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.8); display: flex; justify-content: center; align-items: center; z-index: 1000; font-size: 1rem; pointer-events: none;}
+    </style>
+</head>
+<body>
+    <div id="loading">页面加载中,请稍等...</div>
+    <div id="thumbsUp">👍</div>
+    <div id="statsModal">
+        <div class="modal-content">
+            <span class="close-button" onclick="closeStatsModal()">×</span>
+            <h2>月度自律统计</h2>
+            <h3 id="currentMonth"></h3>
+            <table id="calendar">
+                <thead><tr><th>日</th><th>一</th><th>二</th><th>三</th><th>四</th><th>五</th><th>六</th></tr></thead>
+                <tbody></tbody>
+            </table>
+            <div id="streakInfo"></div>
+        </div>
+    </div>
+    <div class="container">
+        <h2>🏆 自律成就系统</h2>
+        <div id="dateDisplay"></div>
+        <div class="progress">
+          <div class="challenge-status">
+            <div class="status-item success-item">今日挑战成功：<span id="todaySuccessCount">0</span> 次</div>
+            <div class="status-item failure-item" style="display: none;" id="failureItem">今日挑战失败：<span id="todayFailureCount">0</span> 次</div>
+          </div>
+            <p>持续自律天数：<span id="days">0</span> 天</p>
+            <p>本周成功次数：<span id="weekly">0</span>/7</p>
+            <button id="recordButton">⏰ 自律签到</button>
+        </div>
+        <div id="motivation"></div>
+        <div id="breakMessage" style="display: none;"></div>
+        <div class="strategy-box">
+            <h3>🛡️ 即时防御策略</h3>
+            <p>当渴望出现时：</p>
+            <button id="activityButton">🚀 获取替代活动</button>
+            <button id="breathingButton">🧘 开始呼吸练习</button>
+            <p id="activity"></p>
+            <div id="breathTimer" style="display:none;"><p>深呼吸倒计时：<span id="countdown">60</span>秒</p></div>
+            <div id="breathCircle"></div>
+        </div>
+        <div class="strategy-box">
+            <h3>📊 成就可视化</h3>
+            <p>已节省时间：<span id="savedHours">0</span> 分钟</p>
+            <p>健康指数：<span id="healthIndex">0</span>%</p>
+        </div>
+        <button id="statsButton">📅 月自律统计</button>
+        <button id="breakButton">💔 破戒</button>
+      </div>
+    <div class="footer">
+        <hr>
+        <p>科学依据：<ul><li>21天习惯养成理论</li><li>冲动转移法</li><li>正念呼吸练习</li></ul></p>
+        <p>隐私说明：所有数据仅存储在本地浏览器</p>
+    </div>
+    <audio id="breathAudio" src="breath.mp3" loop></audio>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // ---------- DOM 元素 ----------
+        const daysDisplay = document.getElementById('days');
+        const weeklyDisplay = document.getElementById('weekly');
+        const savedHoursDisplay = document.getElementById('savedHours');
+        const healthIndexDisplay = document.getElementById('healthIndex');
+        const motivationDisplay = document.getElementById('motivation');
+        const breakMessageDisplay = document.getElementById('breakMessage');
+        const activityDisplay = document.getElementById('activity');
+        const breathTimerDisplay = document.getElementById('breathTimer');
+        const countdownDisplay = document.getElementById('countdown');
+        const breathCircle = document.getElementById('breathCircle');
+        const breathAudio = document.getElementById('breathAudio');
+        const loading = document.getElementById("loading");
+        const recordButton = document.getElementById('recordButton');
+        const activityButton = document.getElementById('activityButton');
+        const breathingButton = document.getElementById('breathingButton');
+        const breakButton = document.getElementById('breakButton');
+        const statsButton = document.getElementById('statsButton');
+        const statsModal = document.getElementById('statsModal');
+        const currentMonthDisplay = document.getElementById('currentMonth');
+        const calendarBody = document.getElementById('calendar').getElementsByTagName('tbody')[0];
+        const streakInfoDisplay = document.getElementById('streakInfo');
+        const thumbsUp = document.getElementById('thumbsUp');
+        const todaySuccessCountDisplay = document.getElementById('todaySuccessCount');
+        const failureItemDisplay = document.getElementById('failureItem');
+        const todayFailureCountDisplay = document.getElementById('todayFailureCount');
+        const challengeStatus = document.querySelector('.challenge-status');
+        const dateDisplay = document.getElementById('dateDisplay');
+        const closeButton = document.querySelector('.close-button'); // 获取关闭按钮
+        let breathInterval;
+        let countdownValue = 60;
+
+        // ---------- 数据 ----------
+        const START_DATE = new Date('2023-01-01'); // 固定起始日期
+        let data = {
+            streak: 0,
+            lastSuccessDay: 0, // 上次成功日期的天数计数器
+            weeklySuccess: 0,
+            savedMinutes: 0,
+            healthIndex: 0,
+            dailyRecords: {}, // {"day": { success: 1, failure: 0 }}
+        };
+
+        // ---------- 工具函数 ----------
+
+        const loadData = () => {
+            const storedData = localStorage.getItem('selfControlData');
+            if (storedData) {
+                data = JSON.parse(storedData);
+            }
+        };
+
+        const saveData = () => {
+            localStorage.setItem('selfControlData', JSON.stringify(data));
+        };
+
+        // 计算从固定起始日期到给定日期的天数
+        const getDayNumber = (date) => {
+            return Math.floor((date - START_DATE) / (1000 * 60 * 60 * 24));
+        };
+
+        // 获取今天的 Date 对象（已校准时间）
+        const getToday = () => {
+            return new Date(parseInt(localStorage.getItem('calibratedTimestamp')));
+        };
+
+        // ---------- 时间校准 ----------
+        const getTime = async () => {
+            const apiId = '10002866';
+            const apiKey = 'ec90ba12096a04176621ba4a46d8f609';
+            const baseUrl = "https://cn.apihz.cn/api/time/getapi.php";
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            const apiUrl = `${baseUrl}?id=${apiId}&key=${apiKey}&type=1`;
+
+            try {
+                const response = await fetch(apiUrl, { signal: controller.signal });
+                clearTimeout(timeoutId);
+                if (!response.ok) { throw new Error(`HTTP 错误! 状态码: ${response.status}`); }
+                const text = await response.text();
+                const responseData = JSON.parse(text);
+                if (responseData && responseData.msg) {
+                    const timestamp = parseInt(responseData.msg, 10);
+                    if (isNaN(timestamp)) { throw new Error(`解析出的时间戳无效: ${responseData.msg}`); }
+                    localStorage.setItem('calibratedTimestamp', timestamp * 1000);
+                } else { throw new Error('API 返回的数据格式不正确');}
+            } catch (error) {
+                console.error('获取时间失败:', error);
+                // 使用本地时间作为备用方案
+                localStorage.setItem('calibratedTimestamp', Date.now());
+            } finally {
+                loading.style.display = 'none';
+            }
+        };
+
+        // ---------- UI 更新 ----------
+
+        const updateUI = () => {
+            const today = getToday();
+            const todayNumber = getDayNumber(today);
+
+            daysDisplay.textContent = data.streak;
+            weeklyDisplay.textContent = data.weeklySuccess;
+            savedHoursDisplay.textContent = data.savedMinutes;
+            healthIndexDisplay.textContent = data.healthIndex;
+
+            // 更新今日挑战成功/失败次数
+            if (data.dailyRecords[todayNumber]) {
+                todaySuccessCountDisplay.textContent = data.dailyRecords[todayNumber].success;
+                todayFailureCountDisplay.textContent = data.dailyRecords[todayNumber].failure;
+                if (data.dailyRecords[todayNumber].failure > 0) {
+                    failureItemDisplay.style.display = 'flex';
+                    challengeStatus.classList.remove('single');
+                } else {
+                    failureItemDisplay.style.display = 'none';
+                    challengeStatus.classList.add('single');
+                }
+            } else {
+                // 理论上不应该到这里，但为了健壮性，还是加上
+                todaySuccessCountDisplay.textContent = '0';
+                todayFailureCountDisplay.textContent = '0';
+                failureItemDisplay.style.display = 'none';
+                challengeStatus.classList.add('single');
+            }
+
+            // 显示日期
+            dateDisplay.textContent = today.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+
+            // 更新激励文案（只在有成功记录时更新）
+            if (data.dailyRecords[todayNumber] && data.dailyRecords[todayNumber].success > 0) {
+                motivationDisplay.textContent = positiveAffirmations[Math.floor(Math.random() * positiveAffirmations.length)];
+            } else {
+                motivationDisplay.textContent = "您正在创造更好的自己！"; // 默认文案
+            }
+             // 检查今天是否是第一次点击，如果是，则更改按钮文字
+            if (data.dailyRecords[todayNumber] && data.dailyRecords[todayNumber].success === 0) {
+              recordButton.textContent = "⏰ 自律签到"; // 初始文本
+            }
+        };
+
+        // ---------- 每日重置 ----------
+        const dailyReset = () => {
+            const today = getToday();
+            const todayNumber = getDayNumber(today);
+            if (data.lastSuccessDay !== todayNumber) {
+                data.weeklySuccess = 0; // 重置每周成功次数
+            }
+            // 如果今天没有记录，则创建一条新记录
+            if (!data.dailyRecords[todayNumber]) {
+                data.dailyRecords[todayNumber] = { success: 0, failure: 0 };
+            }
+            // 重置按钮文字
+            recordButton.textContent = "⏰ 自律签到";
+        };
+
+        // ---------- 事件处理 ----------
+
+        const recordSuccess = () => {
+            console.log('recordSuccess called'); // 调试用
+            const today = getToday();
+            const todayNumber = getDayNumber(today);
+
+            if (data.lastSuccessDay !== todayNumber) {
+                data.streak++;
+                data.lastSuccessDay = todayNumber; // 更新上次成功日期
+            }
+            data.weeklySuccess++;
+            data.savedMinutes += 40;
+            data.healthIndex = Math.min(data.healthIndex + 2, 100);
+            data.dailyRecords[todayNumber].success++;
+
+            saveData();
+            // 切换文案和按钮文字
+            breakMessageDisplay.style.display = 'none'; // 隐藏破戒文案
+            motivationDisplay.style.display = 'block'; // 显示激励文案
+            motivationDisplay.textContent = positiveAffirmations[Math.floor(Math.random() * positiveAffirmations.length)];
+            recordButton.textContent = "✅ 今日挑战成功"; // 更改按钮文字
+            updateUI();
+            showThumbsUp();
+        };
+
+        const handleBreak = () => {
+            const today = getToday();
+            const todayNumber = getDayNumber(today);
+
+            data.streak = 0; // 重置连续天数
+            data.dailyRecords[todayNumber].failure++;
+
+            breakMessageDisplay.textContent = breakAffirmations[Math.floor(Math.random() * breakAffirmations.length)];
+            breakMessageDisplay.style.display = 'block';
+            motivationDisplay.style.display = 'none';
+
+            saveData();
+            updateUI();
+        };
+
+        const showActivity = () => {
+            console.log('showActivity called'); // 调试用
+            // 确保 activities 数组不为空
+            if (activities.length > 0) {
+                activityDisplay.textContent = activities[Math.floor(Math.random() * activities.length)];
+            } else {
+                activityDisplay.textContent = "暂无替代活动";
+            }
+        };
+
+        const startBreathing = () => {
+            console.log('startBreathing called'); // 调试用
+            resetBreathingUI();
+            breathCircle.style.display = 'block';
+            breathTimerDisplay.style.display = 'block';
+            breathAudio.play();
+            breathInterval = setInterval(() => {
+                countdownValue--;
+                countdownDisplay.textContent = countdownValue;
+                if (countdownValue <= 0) { resetBreathingUI(); }
+            }, 1000);
+        };
+        const resetBreathingUI = () => {
+            clearInterval(breathInterval);
+            breathAudio.pause();
+            breathAudio.currentTime = 0;
+            breathCircle.style.display = 'none';
+            breathTimerDisplay.style.display = 'none';
+            countdownValue = 60;
+            countdownDisplay.textContent = countdownValue;
+        };
+
+        const showStatsModal = () => {
+            const today = getToday();
+            const year = today.getFullYear();
+            const month = today.getMonth();
+            showMonthStats(year, month);
+            statsModal.style.display = 'block';
+        };
+
+        const closeStatsModal = () => {
+            statsModal.style.display = 'none';
+        };
+
+        const showMonthStats = (year, month) => {
+            currentMonthDisplay.textContent = `${year}年${month + 1}月`;
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const firstDayOfWeek = new Date(year, month, 1).getDay();
+
+            calendarBody.innerHTML = '';
+
+            let date = 1;
+            for (let i = 0; i < 6; i++) {
+                const row = document.createElement('tr');
+                for (let j = 0; j < 7; j++) {
+                    if (i === 0 && j < firstDayOfWeek) {
+                        row.appendChild(document.createElement('td'));
+                    } else if (date > daysInMonth) {
+                        break;
+                    } else {
+                        const cell = document.createElement('td');
+                        const dateObject = new Date(year, month, date);
+                        const dayNumber = getDayNumber(dateObject);
+                        const record = data.dailyRecords[dayNumber] || { success: 0, failure: 0 };
+
+                        cell.textContent = `${date} (✓${record.success}, ✗${record.failure})`;
+
+                        // 添加 CSS 类
+                        if (record.success > 0 && record.failure === 0) {
+                            cell.classList.add('success');
+                        } else if (record.failure > 0) {
+                            cell.classList.add('failure');
+                        } else {
+                            cell.classList.add('no-failure'); // 没有破戒记录的样式
+                        }
+
+                        row.appendChild(cell);
+                        date++;
+                    }
+                }
+                calendarBody.appendChild(row);
+            }
+
+            const streaks = calculateStreaks(year, month);
+            streakInfoDisplay.textContent = streaks.length > 0 ? `连续自律时间段：${streaks.join('; ')}` : '本月没有连续自律记录';
+        };
+
+        const calculateStreaks = (year, month) => {
+            const streaks = [];
+            let currentStreakStart = null;
+            let currentStreakEnd = null;
+            const startDate = new Date(year, month, 1);
+            const endDate = new Date(year, month + 1, 0);
+            const startDayNumber = getDayNumber(startDate);
+            const endDayNumber = getDayNumber(endDate);
+
+            for (let dayNumber = startDayNumber; dayNumber <= endDayNumber; dayNumber++) {
+                const record = data.dailyRecords[dayNumber] || { success: 0, failure: 0 };
+
+                if (record.success > 0 && record.failure === 0) {
+                    if (!currentStreakStart) {
+                        currentStreakStart = dayNumber;
+                    }
+                    currentStreakEnd = dayNumber;
+                } else {
+                    if (currentStreakStart) {
+                        const startDate = new Date(START_DATE.getTime() + currentStreakStart * (24 * 60 * 60 * 1000));
+                        const endDate = new Date(START_DATE.getTime() + currentStreakEnd * (24 * 60 * 60 * 1000));
+
+                        const formattedStartDate = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}`;
+                        const formattedEndDate = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
+
+                        streaks.push(`${formattedStartDate} 至 ${formattedEndDate}`);
+                        currentStreakStart = null;
+                        currentStreakEnd = null;
+                    }
+                }
+            }
+
+            if (currentStreakStart) {
+                const startDate = new Date(START_DATE.getTime() + currentStreakStart * (24 * 60 * 60 * 1000));
+                const endDate = new Date(START_DATE.getTime() + currentStreakEnd * (24 * 60 * 60 * 1000));
+                const formattedStartDate = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}`;
+                const formattedEndDate = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
+                streaks.push(`${formattedStartDate} 至 ${formattedEndDate}`);
+            }
+            return streaks;
+        };
+
+        const showThumbsUp = () => {
+            thumbsUp.style.animation = 'none';
+            void thumbsUp.offsetWidth;
+            thumbsUp.style.animation = null;
+            thumbsUp.style.animation = 'thumbsUpAnim 1.5s forwards';
+        };
+
+        // ---------- 文案库 ----------
+
+        // 30组正向激励文案
+        const positiveAffirmations = [
+            "太棒了，你又战胜了一次挑战！", "你的自律令人钦佩！", "每一步，都在接近更好的自己！", "你正在书写属于你的成功故事！", "坚持下去，你会看到惊人的改变！", "你是自律的典范！", "你的努力，时间会给你答案！", "相信自己，你可以做到！", "小小的进步，累积成大大的成功！", "你比你想象的更强大！", "自律，是通往自由的桥梁！", "你正在塑造一个全新的自己！", "你的坚持，终将闪耀！", "每一步，都算数！", "你正在成为你想要成为的人！", "自律，是最好的礼物！", "你的努力，不会被辜负！", "坚持，就是胜利！", "你正在创造奇迹！", "你的进步，值得庆祝！", "自律，让生活更美好！", "你正在超越昨天的自己！", "每一天，都是新的开始！", "你的潜力，无限可能！", "自律，是成功的基石！", "你正在创造属于你的辉煌！", "坚持下去，你会感谢今天的自己！", "你的努力，终将开花结果！", "自律，成就非凡！", "你正在走向更美好的未来！"
+        ];
+        // 10组破戒安慰+鼓励+鞭策文案
+        const breakAffirmations = [
+          "没关系，一次失误不代表失败，重新振作起来！", "跌倒了就爬起来，继续前进，你比昨天更坚强！", "别灰心，每一次挫折都是成长的机会。", "接受不完美，但永不放弃追求卓越。", "从错误中学习，下一次你会做得更好！", "调整心态，重新出发，你依然可以掌控自己！", "给自己一个拥抱，然后继续挑战！", "记住你的目标，不要让一时的失误阻挡你。", "失败是成功之母，每一次尝试都让你更接近成功。", "鞭策自己，但也要善待自己，你是最棒的！"
+        ];
+
+          // 20种行为替代方案
+          const activities = [
+            "🏃 做20个开合跳，激活身体！", "📖 阅读10页你喜欢的书籍，滋养心灵。", "🧹 花10分钟整理你的书桌或房间一角。", "🚶 去户外快走15分钟，呼吸新鲜空气。", "💧 喝一大杯温水，补充水分。", "🧘‍ 做5分钟冥想，平静内心。", "🎶 听一首你最喜欢的歌曲，放松心情。", "✍️ 写下3件你感激的事情。", "🌱 照顾一下你的植物，感受生命力。", "🍎 吃一个苹果或你喜欢的水果。", "💪 做一组你擅长的力量训练（如俯卧撑、深蹲）。", "🧠 玩一个益智小游戏，锻炼大脑。", "🎨 随意涂鸦几笔，释放创造力。", "📞 给一位朋友或家人打个简短的电话。", "📝 列出今天/明天最重要的3件事。", "📚 学习一个新的小技能（如一个新单词、一个新概念）。", "🌳 观察窗外的树木或天空5分钟。", "😊 对着镜子微笑2分钟。", "🙏 做5分钟拉伸运动，放松肌肉。", "📰 浏览新闻标题，了解时事（但避免沉迷）。"
+          ];
+
+        // ---------- 初始化 ----------
+
+        const initApp = async () => {
+            await getTime();       // 获取校准时间
+            loadData();           // 加载数据
+            dailyReset();         // 执行每日重置
+            updateUI();           // 更新 UI
+
+            // 注册事件监听器 (在初始化完成后)
+            recordButton.addEventListener('click', recordSuccess);
+            breakButton.addEventListener('click', handleBreak);
+            activityButton.addEventListener('click', showActivity);
+            breathingButton.addEventListener('click', startBreathing);
+            statsButton.addEventListener('click', showStatsModal);
+            closeButton.addEventListener('click', closeStatsModal); // 重新绑定关闭按钮事件
+        };
+
+        initApp(); // 启动应用
+
+    });
+    </script>
+</body>
+</html>
