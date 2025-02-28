@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>自律管理系统 - 最终修复版</title>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
     <style>
         /* 基础样式 */
         body { font-family: '微软雅黑', sans-serif; margin: 0; padding: 0; background: #f5f8fa; color: #333; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
@@ -47,9 +48,10 @@
         .footer { margin-top: auto; padding: 1rem; color: #666; font-size: 0.9rem; text-align: center; }
         .footer ul { list-style: none; padding: 0; }
         #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.8); display: flex; justify-content: center; align-items: center; z-index: 1000; font-size: 1rem; pointer-events: none;}
+        .export-button { margin-top: 1rem; background: #28a745; color: white; padding: 0.5rem 1rem; border: none; border-radius: 4px; cursor: pointer; font-size: 1rem; }
+        .export-button:hover { background: #218838; }
     </style>
-</head>
-<body>
+</head><body>
     <div id="loading">页面加载中,请稍等...</div>
     <div id="thumbsUp">👍</div>
     <div id="statsModal">
@@ -62,6 +64,7 @@
                 <tbody></tbody>
             </table>
             <div id="streakInfo"></div>
+            <button id="exportButton" class="export-button">📷 导出统计图片</button>
         </div>
     </div>
     <div class="container">
@@ -132,23 +135,23 @@
         const todayFailureCountDisplay = document.getElementById('todayFailureCount');
         const challengeStatus = document.querySelector('.challenge-status');
         const dateDisplay = document.getElementById('dateDisplay');
-        const closeButton = document.querySelector('.close-button'); // 获取关闭按钮
+        const closeButton = document.querySelector('.close-button');
+        const exportButton = document.getElementById('exportButton');
         let breathInterval;
         let countdownValue = 60;
 
         // ---------- 数据 ----------
-        const START_DATE = new Date('2023-01-01'); // 固定起始日期
+        const START_DATE = new Date('2023-01-01');
         let data = {
             streak: 0,
-            lastSuccessDay: 0, // 上次成功日期的天数计数器
+            lastSuccessDay: 0,
             weeklySuccess: 0,
             savedMinutes: 0,
             healthIndex: 0,
-            dailyRecords: {}, // {"day": { success: 1, failure: 0 }}
+            dailyRecords: {},
         };
 
         // ---------- 工具函数 ----------
-
         const loadData = () => {
             const storedData = localStorage.getItem('selfControlData');
             if (storedData) {
@@ -160,14 +163,16 @@
             localStorage.setItem('selfControlData', JSON.stringify(data));
         };
 
-        // 计算从固定起始日期到给定日期的天数
         const getDayNumber = (date) => {
-            return Math.floor((date - START_DATE) / (1000 * 60 * 60 * 24));
+            const start = new Date(START_DATE.getFullYear(), START_DATE.getMonth(), START_DATE.getDate());
+            const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+            return Math.floor((target - start) / (1000 * 60 * 60 * 24));
         };
 
-        // 获取今天的 Date 对象（已校准时间）
         const getToday = () => {
-            return new Date(parseInt(localStorage.getItem('calibratedTimestamp')));
+            const timestamp = localStorage.getItem('calibratedTimestamp') || Date.now();
+            const date = new Date(parseInt(timestamp));
+            return new Date(date.getFullYear(), date.getMonth(), date.getDate());
         };
 
         // ---------- 时间校准 ----------
@@ -192,7 +197,6 @@
                 } else { throw new Error('API 返回的数据格式不正确');}
             } catch (error) {
                 console.error('获取时间失败:', error);
-                // 使用本地时间作为备用方案
                 localStorage.setItem('calibratedTimestamp', Date.now());
             } finally {
                 loading.style.display = 'none';
@@ -200,7 +204,6 @@
         };
 
         // ---------- UI 更新 ----------
-
         const updateUI = () => {
             const today = getToday();
             const todayNumber = getDayNumber(today);
@@ -210,7 +213,6 @@
             savedHoursDisplay.textContent = data.savedMinutes;
             healthIndexDisplay.textContent = data.healthIndex;
 
-            // 更新今日挑战成功/失败次数
             if (data.dailyRecords[todayNumber]) {
                 todaySuccessCountDisplay.textContent = data.dailyRecords[todayNumber].success;
                 todayFailureCountDisplay.textContent = data.dailyRecords[todayNumber].failure;
@@ -222,87 +224,107 @@
                     challengeStatus.classList.add('single');
                 }
             } else {
-                // 理论上不应该到这里，但为了健壮性，还是加上
                 todaySuccessCountDisplay.textContent = '0';
                 todayFailureCountDisplay.textContent = '0';
                 failureItemDisplay.style.display = 'none';
                 challengeStatus.classList.add('single');
             }
 
-            // 显示日期
-            dateDisplay.textContent = today.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+            dateDisplay.textContent = today.toLocaleDateString('zh-CN', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric', 
+                weekday: 'long' 
+            });
 
-            // 更新激励文案（只在有成功记录时更新）
             if (data.dailyRecords[todayNumber] && data.dailyRecords[todayNumber].success > 0) {
                 motivationDisplay.textContent = positiveAffirmations[Math.floor(Math.random() * positiveAffirmations.length)];
             } else {
-                motivationDisplay.textContent = "您正在创造更好的自己！"; // 默认文案
+                motivationDisplay.textContent = "您正在创造更好的自己！";
             }
-             // 检查今天是否是第一次点击，如果是，则更改按钮文字
-            if (data.dailyRecords[todayNumber] && data.dailyRecords[todayNumber].success === 0) {
-              recordButton.textContent = "⏰ 自律签到"; // 初始文本
-            }
-        };
 
-        // ---------- 每日重置 ----------
+            if (data.dailyRecords[todayNumber] && data.dailyRecords[todayNumber].success === 0) {
+                recordButton.textContent = "⏰ 自律签到";
+            }
+
+            // 更新统计表（如果正在显示）
+            if (statsModal.style.display === 'block') {
+                const currentDate = new Date(today);
+                showMonthStats(currentDate.getFullYear(), currentDate.getMonth());
+            }
+        };        // ---------- 每日重置 ----------
         const dailyReset = () => {
             const today = getToday();
             const todayNumber = getDayNumber(today);
             if (data.lastSuccessDay !== todayNumber) {
-                data.weeklySuccess = 0; // 重置每周成功次数
+                data.weeklySuccess = 0;
+                recordButton.textContent = "⏰ 自律签到";
             }
-            // 如果今天没有记录，则创建一条新记录
             if (!data.dailyRecords[todayNumber]) {
                 data.dailyRecords[todayNumber] = { success: 0, failure: 0 };
             }
-            // 重置按钮文字
-            recordButton.textContent = "⏰ 自律签到";
         };
 
         // ---------- 事件处理 ----------
-
         const recordSuccess = () => {
-            console.log('recordSuccess called'); // 调试用
             const today = getToday();
             const todayNumber = getDayNumber(today);
 
+            if (!data.dailyRecords[todayNumber]) {
+                data.dailyRecords[todayNumber] = { success: 0, failure: 0 };
+            }
+
             if (data.lastSuccessDay !== todayNumber) {
                 data.streak++;
-                data.lastSuccessDay = todayNumber; // 更新上次成功日期
+                data.lastSuccessDay = todayNumber;
             }
             data.weeklySuccess++;
             data.savedMinutes += 40;
             data.healthIndex = Math.min(data.healthIndex + 2, 100);
             data.dailyRecords[todayNumber].success++;
 
-            saveData();
-            // 切换文案和按钮文字
-            breakMessageDisplay.style.display = 'none'; // 隐藏破戒文案
-            motivationDisplay.style.display = 'block'; // 显示激励文案
-            motivationDisplay.textContent = positiveAffirmations[Math.floor(Math.random() * positiveAffirmations.length)];
-            recordButton.textContent = "✅ 今日挑战成功"; // 更改按钮文字
-            updateUI();
+            breakMessageDisplay.style.display = 'none';
+            motivationDisplay.style.display = 'block';
+            recordButton.textContent = "✅ 今日挑战成功";
             showThumbsUp();
+
+            // 更新统计表和连续记录
+            const currentDate = new Date(today);
+            showMonthStats(currentDate.getFullYear(), currentDate.getMonth());
+
+            saveData();
+            updateUI();
         };
 
         const handleBreak = () => {
             const today = getToday();
             const todayNumber = getDayNumber(today);
 
-            data.streak = 0; // 重置连续天数
+            if (!data.dailyRecords[todayNumber]) {
+                data.dailyRecords[todayNumber] = { success: 0, failure: 0 };
+            }
+
+            data.streak = 0;
             data.dailyRecords[todayNumber].failure++;
+            data.healthIndex = Math.max(0, data.healthIndex - 5);
 
             breakMessageDisplay.textContent = breakAffirmations[Math.floor(Math.random() * breakAffirmations.length)];
             breakMessageDisplay.style.display = 'block';
             motivationDisplay.style.display = 'none';
+
+            failureItemDisplay.style.display = 'flex';
+            challengeStatus.classList.remove('single');
+            todayFailureCountDisplay.textContent = data.dailyRecords[todayNumber].failure;
+
+            // 更新统计表和连续记录
+            const currentDate = new Date(today);
+            showMonthStats(currentDate.getFullYear(), currentDate.getMonth());
 
             saveData();
             updateUI();
         };
 
         const showActivity = () => {
-            console.log('showActivity called'); // 调试用
-            // 确保 activities 数组不为空
             if (activities.length > 0) {
                 activityDisplay.textContent = activities[Math.floor(Math.random() * activities.length)];
             } else {
@@ -311,7 +333,6 @@
         };
 
         const startBreathing = () => {
-            console.log('startBreathing called'); // 调试用
             resetBreathingUI();
             breathCircle.style.display = 'block';
             breathTimerDisplay.style.display = 'block';
@@ -322,6 +343,7 @@
                 if (countdownValue <= 0) { resetBreathingUI(); }
             }, 1000);
         };
+
         const resetBreathingUI = () => {
             clearInterval(breathInterval);
             breathAudio.pause();
@@ -334,9 +356,7 @@
 
         const showStatsModal = () => {
             const today = getToday();
-            const year = today.getFullYear();
-            const month = today.getMonth();
-            showMonthStats(year, month);
+            showMonthStats(today.getFullYear(), today.getMonth());
             statsModal.style.display = 'block';
         };
 
@@ -350,8 +370,8 @@
             const firstDayOfWeek = new Date(year, month, 1).getDay();
 
             calendarBody.innerHTML = '';
-
             let date = 1;
+
             for (let i = 0; i < 6; i++) {
                 const row = document.createElement('tr');
                 for (let j = 0; j < 7; j++) {
@@ -365,15 +385,27 @@
                         const dayNumber = getDayNumber(dateObject);
                         const record = data.dailyRecords[dayNumber] || { success: 0, failure: 0 };
 
-                        cell.textContent = `${date} (✓${record.success}, ✗${record.failure})`;
+                        cell.textContent = `${date}`;
+                        if (record.success > 0 || record.failure > 0) {
+                            cell.textContent += ` (✓${record.success}, ✗${record.failure})`;
+                        }
 
-                        // 添加 CSS 类
-                        if (record.success > 0 && record.failure === 0) {
-                            cell.classList.add('success');
-                        } else if (record.failure > 0) {
+                        if (record.failure > 0) {
                             cell.classList.add('failure');
+                            cell.style.backgroundColor = '#dc3545';
+                            cell.style.color = 'white';
+                        } else if (record.success > 0) {
+                            cell.classList.add('success');
                         } else {
-                            cell.classList.add('no-failure'); // 没有破戒记录的样式
+                            cell.classList.add('no-failure');
+                        }
+
+                        const today = getToday();
+                        if (date === today.getDate() && 
+                            month === today.getMonth() && 
+                            year === today.getFullYear()) {
+                            cell.style.fontWeight = 'bold';
+                            cell.style.border = '2px solid #3498db';
                         }
 
                         row.appendChild(cell);
@@ -381,16 +413,20 @@
                     }
                 }
                 calendarBody.appendChild(row);
+                if (date > daysInMonth) break;
             }
 
             const streaks = calculateStreaks(year, month);
-            streakInfoDisplay.textContent = streaks.length > 0 ? `连续自律时间段：${streaks.join('; ')}` : '本月没有连续自律记录';
+            streakInfoDisplay.textContent = streaks.length > 0 
+                ? `连续自律时间段：${streaks.join('; ')}` 
+                : '本月没有连续自律记录';
         };
 
         const calculateStreaks = (year, month) => {
             const streaks = [];
             let currentStreakStart = null;
             let currentStreakEnd = null;
+
             const startDate = new Date(year, month, 1);
             const endDate = new Date(year, month + 1, 0);
             const startDayNumber = getDayNumber(startDate);
@@ -399,7 +435,7 @@
             for (let dayNumber = startDayNumber; dayNumber <= endDayNumber; dayNumber++) {
                 const record = data.dailyRecords[dayNumber] || { success: 0, failure: 0 };
 
-                if (record.success > 0 && record.failure === 0) {
+                if (record.failure === 0) {
                     if (!currentStreakStart) {
                         currentStreakStart = dayNumber;
                     }
@@ -409,10 +445,10 @@
                         const startDate = new Date(START_DATE.getTime() + currentStreakStart * (24 * 60 * 60 * 1000));
                         const endDate = new Date(START_DATE.getTime() + currentStreakEnd * (24 * 60 * 60 * 1000));
 
-                        const formattedStartDate = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}`;
-                        const formattedEndDate = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
+                        const formattedStartDate = `${startDate.getMonth() + 1}月${startDate.getDate()}号`;
+                        const formattedEndDate = `${endDate.getMonth() + 1}月${endDate.getDate()}号`;
 
-                        streaks.push(`${formattedStartDate} 至 ${formattedEndDate}`);
+                        streaks.push(`${formattedStartDate}-${formattedEndDate}`);
                         currentStreakStart = null;
                         currentStreakEnd = null;
                     }
@@ -422,10 +458,13 @@
             if (currentStreakStart) {
                 const startDate = new Date(START_DATE.getTime() + currentStreakStart * (24 * 60 * 60 * 1000));
                 const endDate = new Date(START_DATE.getTime() + currentStreakEnd * (24 * 60 * 60 * 1000));
-                const formattedStartDate = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}`;
-                const formattedEndDate = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
-                streaks.push(`${formattedStartDate} 至 ${formattedEndDate}`);
+
+                const formattedStartDate = `${startDate.getMonth() + 1}月${startDate.getDate()}号`;
+                const formattedEndDate = `${endDate.getMonth() + 1}月${endDate.getDate()}号`;
+
+                streaks.push(`${formattedStartDate}-${formattedEndDate}`);
             }
+
             return streaks;
         };
 
@@ -436,41 +475,116 @@
             thumbsUp.style.animation = 'thumbsUpAnim 1.5s forwards';
         };
 
+        // 导出功能
+        const exportToJPG = () => {
+            const content = document.createElement('div');
+            content.style.background = 'white';
+            content.style.padding = '20px';
+            content.style.width = 'fit-content';
+            
+            const title = document.createElement('h2');
+            title.textContent = currentMonthDisplay.textContent + ' 自律统计';
+            content.appendChild(title);
+            
+            const calendarClone = calendar.cloneNode(true);
+            content.appendChild(calendarClone);
+            
+            const streakClone = streakInfoDisplay.cloneNode(true);
+            content.appendChild(streakClone);
+            
+            const exportTime = document.createElement('p');
+            exportTime.style.color = '#666';
+            exportTime.style.fontSize = '12px';
+            exportTime.textContent = '导出时间：' + new Date().toLocaleString();
+            content.appendChild(exportTime);
+            
+            html2canvas(content, {
+                backgroundColor: 'white',
+                scale: 2,
+            }).then(canvas => {
+                const image = canvas.toDataURL('image/jpeg', 0.9);
+                const link = document.createElement('a');
+                link.download = `自律统计_${currentMonthDisplay.textContent}.jpg`;
+                link.href = image;
+                link.click();
+            });
+        };
+
         // ---------- 文案库 ----------
-
-        // 30组正向激励文案
         const positiveAffirmations = [
-            "太棒了，你又战胜了一次挑战！", "你的自律令人钦佩！", "每一步，都在接近更好的自己！", "你正在书写属于你的成功故事！", "坚持下去，你会看到惊人的改变！", "你是自律的典范！", "你的努力，时间会给你答案！", "相信自己，你可以做到！", "小小的进步，累积成大大的成功！", "你比你想象的更强大！", "自律，是通往自由的桥梁！", "你正在塑造一个全新的自己！", "你的坚持，终将闪耀！", "每一步，都算数！", "你正在成为你想要成为的人！", "自律，是最好的礼物！", "你的努力，不会被辜负！", "坚持，就是胜利！", "你正在创造奇迹！", "你的进步，值得庆祝！", "自律，让生活更美好！", "你正在超越昨天的自己！", "每一天，都是新的开始！", "你的潜力，无限可能！", "自律，是成功的基石！", "你正在创造属于你的辉煌！", "坚持下去，你会感谢今天的自己！", "你的努力，终将开花结果！", "自律，成就非凡！", "你正在走向更美好的未来！"
-        ];
-        // 10组破戒安慰+鼓励+鞭策文案
-        const breakAffirmations = [
-          "没关系，一次失误不代表失败，重新振作起来！", "跌倒了就爬起来，继续前进，你比昨天更坚强！", "别灰心，每一次挫折都是成长的机会。", "接受不完美，但永不放弃追求卓越。", "从错误中学习，下一次你会做得更好！", "调整心态，重新出发，你依然可以掌控自己！", "给自己一个拥抱，然后继续挑战！", "记住你的目标，不要让一时的失误阻挡你。", "失败是成功之母，每一次尝试都让你更接近成功。", "鞭策自己，但也要善待自己，你是最棒的！"
+            "太棒了，你又战胜了一次挑战！", "你的自律令人钦佩！", "每一步，都在接近更好的自己！", 
+            "你正在书写属于你的成功故事！", "坚持下去，你会看到惊人的改变！", "你是自律的典范！", 
+            "你的努力，时间会给你答案！", "相信自己，你可以做到！", "小小的进步，累积成大大的成功！", 
+            "你比你想象的更强大！", "自律，是通往自由的桥梁！", "你正在塑造一个全新的自己！", 
+            "你的坚持，终将闪耀！", "每一步，都算数！", "你正在成为你想要成为的人！", 
+            "自律，是最好的礼物！", "你的努力，不会被辜负！", "坚持，就是胜利！", 
+            "你正在创造奇迹！", "你的进步，值得庆祝！", "自律，让生活更美好！", 
+            "你正在超越昨天的自己！", "每一天，都是新的开始！", "你的潜力，无限可能！", 
+            "自律，是成功的基石！", "你正在创造属于你的辉煌！", "坚持下去，你会感谢今天的自己！", 
+            "你的努力，终将开花结果！", "自律，成就非凡！", "你正在走向更美好的未来！"
         ];
 
-          // 20种行为替代方案
-          const activities = [
-            "🏃 做20个开合跳，激活身体！", "📖 阅读10页你喜欢的书籍，滋养心灵。", "🧹 花10分钟整理你的书桌或房间一角。", "🚶 去户外快走15分钟，呼吸新鲜空气。", "💧 喝一大杯温水，补充水分。", "🧘‍ 做5分钟冥想，平静内心。", "🎶 听一首你最喜欢的歌曲，放松心情。", "✍️ 写下3件你感激的事情。", "🌱 照顾一下你的植物，感受生命力。", "🍎 吃一个苹果或你喜欢的水果。", "💪 做一组你擅长的力量训练（如俯卧撑、深蹲）。", "🧠 玩一个益智小游戏，锻炼大脑。", "🎨 随意涂鸦几笔，释放创造力。", "📞 给一位朋友或家人打个简短的电话。", "📝 列出今天/明天最重要的3件事。", "📚 学习一个新的小技能（如一个新单词、一个新概念）。", "🌳 观察窗外的树木或天空5分钟。", "😊 对着镜子微笑2分钟。", "🙏 做5分钟拉伸运动，放松肌肉。", "📰 浏览新闻标题，了解时事（但避免沉迷）。"
-          ];
+        const breakAffirmations = [
+            "没关系，一次失误不代表失败，重新振作起来！", 
+            "跌倒了就爬起来，继续前进，你比昨天更坚强！", 
+            "别灰心，每一次挫折都是成长的机会。", 
+            "接受不完美，但永不放弃追求卓越。", 
+            "从错误中学习，下一次你会做得更好！", 
+            "调整心态，重新出发，你依然可以掌控自己！", 
+            "给自己一个拥抱，然后继续挑战！", 
+            "记住你的目标，不要让一时的失误阻挡你。", 
+            "失败是成功之母，每一次尝试都让你更接近成功。", 
+            "鞭策自己，但也要善待自己，你是最棒的！"
+        ];
+
+        const activities = [
+            "🏃 做20个开合跳，激活身体！", 
+            "📖 阅读10页你喜欢的书籍，滋养心灵。", 
+            "🧹 花10分钟整理你的书桌或房间一角。", 
+            "🚶 去户外快走15分钟，呼吸新鲜空气。", 
+            "💧 喝一大杯温水，补充水分。", 
+            "🧘‍ 做5分钟冥想，平静内心。", 
+            "🎶 听一首你最喜欢的歌曲，放松心情。", 
+            "✍️ 写下3件你感激的事情。", 
+            "🌱 照顾一下你的植物，感受生命力。", 
+            "🍎 吃一个苹果或你喜欢的水果。", 
+            "💪 做一组你擅长的力量训练（如俯卧撑、深蹲）。", 
+            "🧠 玩一个益智小游戏，锻炼大脑。", 
+            "🎨 随意涂鸦几笔，释放创造力。", 
+            "📞 给一位朋友或家人打个简短的电话。", 
+            "📝 列出今天/明天最重要的3件事。", 
+            "📚 学习一个新的小技能（如一个新单词、一个新概念）。", 
+            "🌳 观察窗外的树木或天空5分钟。", 
+            "😊 对着镜子微笑2分钟。", 
+            "🙏 做5分钟拉伸运动，放松肌肉。", 
+            "📰 浏览新闻标题，了解时事（但避免沉迷）。"
+        ];
 
         // ---------- 初始化 ----------
-
         const initApp = async () => {
-            await getTime();       // 获取校准时间
-            loadData();           // 加载数据
-            dailyReset();         // 执行每日重置
-            updateUI();           // 更新 UI
+            await getTime();
+            loadData();
+            dailyReset();
+            updateUI();
 
-            // 注册事件监听器 (在初始化完成后)
+            // 注册事件监听器
             recordButton.addEventListener('click', recordSuccess);
             breakButton.addEventListener('click', handleBreak);
             activityButton.addEventListener('click', showActivity);
             breathingButton.addEventListener('click', startBreathing);
             statsButton.addEventListener('click', showStatsModal);
-            closeButton.addEventListener('click', closeStatsModal); // 重新绑定关闭按钮事件
+            closeButton.addEventListener('click', closeStatsModal);
+            exportButton.addEventListener('click', exportToJPG);
+
+            // 点击模态框外部时关闭
+            statsModal.addEventListener('click', (e) => {
+                if (e.target === statsModal) {
+                    closeStatsModal();
+                }
+            });
         };
 
-        initApp(); // 启动应用
-
+        initApp();
     });
     </script>
 </body>
